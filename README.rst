@@ -1,4 +1,5 @@
-
+This fork runs on the Google App Engine Python Runtime. To achieve this, I removed the dependency on requests, replacing it with AppEngine's built-in stuff.  Please contribute/test! Thanks! -savraj
+=========
 
 InfluxDB-Python is a client for interacting with InfluxDB_. Maintained by @aviau (https://github.com/aviau).
 
