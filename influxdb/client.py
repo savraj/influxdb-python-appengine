@@ -9,8 +9,11 @@ import socket
 import time
 import threading
 import random
-import requests
-import requests.exceptions
+import urllib
+import base64
+from google.appengine.api.urlfetch import fetch
+from google.appengine.api.urlfetch_errors import Error as URLFetchError
+
 from sys import version_info
 
 from influxdb.line_protocol import make_lines
@@ -67,7 +70,7 @@ class InfluxDBClient(object):
                  username='root',
                  password='root',
                  database=None,
-                 ssl=False,
+                 ssl=True,
                  verify_ssl=False,
                  timeout=None,
                  use_udp=False,
@@ -86,7 +89,6 @@ class InfluxDBClient(object):
 
         self.use_udp = use_udp
         self.udp_port = udp_port
-        self._session = requests.Session()
         if use_udp:
             self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -225,23 +227,23 @@ localhost:8086/databasename', timeout=5, udp_port=159)
         if isinstance(data, (dict, list)):
             data = json.dumps(data)
 
+        base64string = base64.encodestring('%s:%s' % (self._username, self._password)).replace('\n', '')
+        headers["Authorization"] = "Basic %s" % base64string
+        full_target_url = url if not params else url+"?"+urllib.urlencode(params)
+
         # Try to send the request a maximum of three times. (see #103)
         # TODO (aviau): Make this configurable.
         for i in range(0, 3):
             try:
-                response = self._session.request(
+                response = fetch(
+                    url=full_target_url,
+                    payload=data,
                     method=method,
-                    url=url,
-                    auth=(self._username, self._password),
-                    params=params,
-                    data=data,
                     headers=headers,
-                    proxies=self._proxies,
-                    verify=self._verify_ssl,
-                    timeout=self._timeout
+                    deadline=self._timeout
                 )
                 break
-            except requests.exceptions.ConnectionError as e:
+            except URLFetchError as e:
                 if i < 2:
                     continue
                 else:
@@ -332,7 +334,7 @@ localhost:8086/databasename', timeout=5, udp_port=159)
             expected_response_code=expected_response_code
         )
 
-        data = response.json()
+        data = json.loads(response.content)
 
         results = [
             ResultSet(result, raise_errors=raise_errors)
